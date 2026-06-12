@@ -12,7 +12,11 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@apollo/server": "^5.5.1",
+    "@as-integrations/express5": "^1.1.2",
+    "cors": "^2.8.6",
     "express": "^5.2.1",
+    "graphql": "^16.14.2",
     "mongodb": "^7.3.0",
     "zod": "^4.4.3"
   },

@@ -1,12 +1,15 @@
 const express = require("express");
+const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
 const { z } = require("zod");
+const { ApolloServer } = require("@apollo/server");
+const { expressMiddleware } = require("@as-integrations/express5");
 
 const port = 8010;
 const mongoUrl = "mongodb://localhost:27017";
 
 const isObjectId = (value) =>
-  ObjectId.isValid(value) && new ObjectId(value).toString() === value;
+    ObjectId.isValid(value) && new ObjectId(value).toString() === value;
 
 const metaSchema = z.record(z.string(), z.any());
 
@@ -32,110 +35,281 @@ function createDocument(data) {
   };
 }
 
-function createPostRoute(db, collectionName, schema) {
-  return async (req, res, next) => {
-    try {
-      const result = await schema.safeParseAsync(req.body);
+function formatDocument(document) {
+  if (!document) return null;
 
-      if (!result.success) {
-        return res.status(400).send(result);
+  return {
+    ...document,
+    id: document._id.toString(),
+    createdAt: document.createdAt
+        ? new Date(document.createdAt).toISOString()
+        : null,
+  };
+}
+
+const typeDefs = `#graphql
+  scalar JSON
+
+  type View {
+    id: ID!
+    source: String!
+    url: String!
+    visitor: String!
+    meta: JSON
+    createdAt: String!
+  }
+
+  type Action {
+    id: ID!
+    source: String!
+    url: String!
+    visitor: String!
+    action: String!
+    meta: JSON
+    createdAt: String!
+  }
+
+  type Goal {
+    id: ID!
+    source: String!
+    url: String!
+    visitor: String!
+    goal: String!
+    meta: JSON
+    createdAt: String!
+  }
+
+  type GoalDetails {
+    id: ID!
+    source: String!
+    url: String!
+    visitor: String!
+    goal: String!
+    meta: JSON
+    createdAt: String!
+    views: [View!]!
+    actions: [Action!]!
+  }
+
+  input CreateViewInput {
+    source: String!
+    url: String!
+    visitor: String!
+    meta: JSON
+  }
+
+  input CreateActionInput {
+    source: String!
+    url: String!
+    visitor: String!
+    action: String!
+    meta: JSON
+  }
+
+  input CreateGoalInput {
+    source: String!
+    url: String!
+    visitor: String!
+    goal: String!
+    meta: JSON
+  }
+
+  type Query {
+    views: [View!]!
+    actions: [Action!]!
+    goals: [Goal!]!
+    goalDetails(goalId: ID!): GoalDetails
+  }
+
+  type Mutation {
+    createView(input: CreateViewInput!): View!
+    createAction(input: CreateActionInput!): Action!
+    createGoal(input: CreateGoalInput!): Goal!
+  }
+`;
+
+const JSONScalar = {
+  __serialize(value) {
+    return value;
+  },
+  __parseValue(value) {
+    return value;
+  },
+  __parseLiteral(ast) {
+    switch (ast.kind) {
+      case "StringValue":
+      case "BooleanValue":
+        return ast.value;
+      case "IntValue":
+      case "FloatValue":
+        return Number(ast.value);
+      case "ObjectValue": {
+        const value = {};
+        ast.fields.forEach((field) => {
+          value[field.name.value] = JSONScalar.__parseLiteral(field.value);
+        });
+        return value;
       }
-
-      const document = createDocument(result.data);
-      const ack = await db.collection(collectionName).insertOne(document);
-
-      return res.status(201).send({ _id: ack.insertedId, ...document });
-    } catch (error) {
-      return next(error);
+      case "ListValue":
+        return ast.values.map(JSONScalar.__parseLiteral);
+      case "NullValue":
+        return null;
+      default:
+        return null;
     }
+  },
+};
+
+function createResolvers(db) {
+  return {
+    JSON: JSONScalar,
+
+    Query: {
+      views: async () => {
+        const documents = await db.collection("views").find({}).toArray();
+        return documents.map(formatDocument);
+      },
+
+      actions: async () => {
+        const documents = await db.collection("actions").find({}).toArray();
+        return documents.map(formatDocument);
+      },
+
+      goals: async () => {
+        const documents = await db.collection("goals").find({}).toArray();
+        return documents.map(formatDocument);
+      },
+
+      goalDetails: async (_, { goalId }) => {
+        if (!isObjectId(goalId)) {
+          throw new Error("Invalid goal id");
+        }
+
+        const result = await db
+            .collection("goals")
+            .aggregate([
+              { $match: { _id: new ObjectId(goalId) } },
+              {
+                $lookup: {
+                  from: "views",
+                  localField: "visitor",
+                  foreignField: "visitor",
+                  as: "views",
+                },
+              },
+              {
+                $lookup: {
+                  from: "actions",
+                  localField: "visitor",
+                  foreignField: "visitor",
+                  as: "actions",
+                },
+              },
+            ])
+            .toArray();
+
+        if (result.length === 0) {
+          return null;
+        }
+
+        return formatDocument({
+          ...result[0],
+          views: result[0].views.map(formatDocument),
+          actions: result[0].actions.map(formatDocument),
+        });
+      },
+    },
+
+    Mutation: {
+      createView: async (_, { input }) => {
+        const result = await CreateViewSchema.safeParseAsync(input);
+
+        if (!result.success) {
+          throw new Error("Invalid view data");
+        }
+
+        const document = createDocument(result.data);
+        const ack = await db.collection("views").insertOne(document);
+
+        return formatDocument({
+          _id: ack.insertedId,
+          ...document,
+        });
+      },
+
+      createAction: async (_, { input }) => {
+        const result = await CreateActionSchema.safeParseAsync(input);
+
+        if (!result.success) {
+          throw new Error("Invalid action data");
+        }
+
+        const document = createDocument(result.data);
+        const ack = await db.collection("actions").insertOne(document);
+
+        return formatDocument({
+          _id: ack.insertedId,
+          ...document,
+        });
+      },
+
+      createGoal: async (_, { input }) => {
+        const result = await CreateGoalSchema.safeParseAsync(input);
+
+        if (!result.success) {
+          throw new Error("Invalid goal data");
+        }
+
+        const document = createDocument(result.data);
+        const ack = await db.collection("goals").insertOne(document);
+
+        return formatDocument({
+          _id: ack.insertedId,
+          ...document,
+        });
+      },
+    },
   };
 }
 
-function createListRoute(db, collectionName) {
-  return async (req, res, next) => {
-    try {
-      const documents = await db.collection(collectionName).find({}).toArray();
-
-      return res.send(documents);
-    } catch (error) {
-      return next(error);
-    }
-  };
-}
-
-function createApp(db) {
+async function createApp(db) {
   const app = express();
 
-  app.use(express.json());
+  const server = new ApolloServer({
+    typeDefs,
+    resolvers: createResolvers(db),
+  });
+
+  await server.start();
+
+  app.use(
+      "/graphql",
+      cors(),
+      express.json(),
+      expressMiddleware(server)
+  );
 
   app.get("/", (req, res) => {
     res.send({
-      message: "REST Analytics API",
-      endpoints: {
-        createView: "POST /views",
-        listViews: "GET /views",
-        createAction: "POST /actions",
-        listActions: "GET /actions",
-        createGoal: "POST /goals",
-        listGoals: "GET /goals",
-        goalDetails: "GET /goals/:goalId/details",
+      message: "GraphQL Analytics API",
+      graphqlEndpoint: "POST /graphql",
+      playground: "http://localhost:8010/graphql",
+      queries: {
+        views: "query { views { id source url visitor meta createdAt } }",
+        actions: "query { actions { id source url visitor action meta createdAt } }",
+        goals: "query { goals { id source url visitor goal meta createdAt } }",
+        goalDetails:
+            "query { goalDetails(goalId: \"GOAL_ID\") { id goal visitor views { id url } actions { id action } } }",
+      },
+      mutations: {
+        createView:
+            "mutation { createView(input: { source: \"website\", url: \"/home\", visitor: \"user1\" }) { id source url visitor createdAt } }",
+        createAction:
+            "mutation { createAction(input: { source: \"website\", url: \"/home\", visitor: \"user1\", action: \"click\" }) { id action createdAt } }",
+        createGoal:
+            "mutation { createGoal(input: { source: \"website\", url: \"/checkout\", visitor: \"user1\", goal: \"purchase\" }) { id goal createdAt } }",
       },
     });
-  });
-
-  app.post("/views", createPostRoute(db, "views", CreateViewSchema));
-  app.get("/views", createListRoute(db, "views"));
-
-  app.post("/actions", createPostRoute(db, "actions", CreateActionSchema));
-  app.get("/actions", createListRoute(db, "actions"));
-
-  app.post("/goals", createPostRoute(db, "goals", CreateGoalSchema));
-  app.get("/goals", createListRoute(db, "goals"));
-
-  app.get("/goals/:goalId/details", async (req, res, next) => {
-    try {
-      const { goalId } = req.params;
-
-      if (!isObjectId(goalId)) {
-        return res.status(400).send({ error: "Invalid goal id" });
-      }
-
-      const result = await db
-        .collection("goals")
-        .aggregate([
-          { $match: { _id: new ObjectId(goalId) } },
-          {
-            $lookup: {
-              from: "views",
-              localField: "visitor",
-              foreignField: "visitor",
-              as: "views",
-            },
-          },
-          {
-            $lookup: {
-              from: "actions",
-              localField: "visitor",
-              foreignField: "visitor",
-              as: "actions",
-            },
-          },
-        ])
-        .toArray();
-
-      if (result.length === 0) {
-        return res.status(404).send({ error: "Goal not found" });
-      }
-
-      return res.send(result[0]);
-    } catch (error) {
-      return next(error);
-    }
-  });
-
-  app.use((error, req, res, next) => {
-    console.error(error);
-    return res.status(500).send({ error: "Internal server error" });
   });
 
   return app;
@@ -146,10 +320,11 @@ async function start() {
   await client.connect();
 
   const db = client.db("myDB_analytics");
-  const app = createApp(db);
+  const app = await createApp(db);
 
   app.listen(port, () => {
     console.log(`Listening on http://localhost:${port}`);
+    console.log(`GraphQL endpoint: http://localhost:${port}/graphql`);
   });
 }
 
