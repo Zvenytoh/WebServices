@@ -1,0 +1,212 @@
+{
+  "_type": "export",
+  "__export_format": 4,
+  "__export_date": "2026-06-12T00:00:00.000Z",
+  "__export_source": "codex:rest-mongodb",
+  "resources": [
+    {
+      "_id": "wrk_rest_mongodb",
+      "_type": "workspace",
+      "name": "REST MongoDB",
+      "description": "Requetes pour tester l'API REST MongoDB Products/Categories."
+    },
+    {
+      "_id": "env_rest_mongodb_base",
+      "_type": "environment",
+      "parentId": "wrk_rest_mongodb",
+      "name": "Base Environment",
+      "data": {
+        "baseUrl": "http://localhost:8000",
+        "categoryId": "COLLER_ID_CATEGORIE_ICI",
+        "productId": "COLLER_ID_PRODUIT_ICI"
+      },
+      "dataPropertyOrder": {
+        "&": ["baseUrl", "categoryId", "productId"]
+      },
+      "color": null,
+      "isPrivate": false,
+      "metaSortKey": 0
+    },
+    {
+      "_id": "fld_products_categories",
+      "_type": "request_group",
+      "parentId": "wrk_rest_mongodb",
+      "name": "Products et Categories",
+      "description": "",
+      "environment": {},
+      "environmentPropertyOrder": null,
+      "metaSortKey": 0
+    },
+    {
+      "_id": "req_root",
+      "_type": "request",
+      "parentId": "fld_products_categories",
+      "name": "GET API Root",
+      "description": "Verifie que le serveur Express repond.",
+      "url": "{{ _.baseUrl }}/",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 0,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_create_category",
+      "_type": "request",
+      "parentId": "fld_products_categories",
+      "name": "POST Create Category",
+      "description": "Cree une categorie. Copier le champ _id de la reponse dans la variable categoryId.",
+      "url": "{{ _.baseUrl }}/categories",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"Informatique\"\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 100,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_create_product",
+      "_type": "request",
+      "parentId": "fld_products_categories",
+      "name": "POST Create Product",
+      "description": "Cree un produit avec l'id de categorie stocke dans categoryId.",
+      "url": "{{ _.baseUrl }}/products",
+      "method": "POST",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"MacBook\",\n  \"about\": \"Ordinateur portable\",\n  \"price\": 1200,\n  \"categoryIds\": [\"{{ _.categoryId }}\"]\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 200,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_list_products",
+      "_type": "request",
+      "parentId": "fld_products_categories",
+      "name": "GET Products With Categories",
+      "description": "Liste les produits et verifie que le champ categories est rempli par l'agregation MongoDB.",
+      "url": "{{ _.baseUrl }}/products",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 300,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_get_product_by_id",
+      "_type": "request",
+      "parentId": "fld_products_categories",
+      "name": "GET Product By ID",
+      "description": "Recupere un produit par son _id. Copier l'id du produit cree dans la variable productId.",
+      "url": "{{ _.baseUrl }}/products/{{ _.productId }}",
+      "method": "GET",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 400,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_update_product",
+      "_type": "request",
+      "parentId": "fld_products_categories",
+      "name": "PUT Update Product",
+      "description": "Remplace un produit par son _id.",
+      "url": "{{ _.baseUrl }}/products/{{ _.productId }}",
+      "method": "PUT",
+      "body": {
+        "mimeType": "application/json",
+        "text": "{\n  \"name\": \"MacBook Pro\",\n  \"about\": \"Ordinateur portable puissant\",\n  \"price\": 1800,\n  \"categoryIds\": [\"{{ _.categoryId }}\"]\n}"
+      },
+      "parameters": [],
+      "headers": [
+        {
+          "name": "Content-Type",
+          "value": "application/json"
+        }
+      ],
+      "authentication": {},
+      "metaSortKey": 500,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    },
+    {
+      "_id": "req_delete_product",
+      "_type": "request",
+      "parentId": "fld_products_categories",
+      "name": "DELETE Product",
+      "description": "Supprime un produit par son _id. Une suppression reussie retourne 204 sans body.",
+      "url": "{{ _.baseUrl }}/products/{{ _.productId }}",
+      "method": "DELETE",
+      "body": {},
+      "parameters": [],
+      "headers": [],
+      "authentication": {},
+      "metaSortKey": 600,
+      "isPrivate": false,
+      "settingStoreCookies": true,
+      "settingSendCookies": true,
+      "settingDisableRenderRequestBody": false,
+      "settingEncodeUrl": true,
+      "settingRebuildPath": true,
+      "settingFollowRedirects": "global"
+    }
+  ]
+}
